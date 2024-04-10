@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using SchoolAPI.Controllers;
-using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Tests.Unit;
 
@@ -11,49 +10,60 @@ namespace SchoolAPI.Tests.Unit;
 public class SchoolControllerTests
 {
     private SchoolController _controller;
-    private Mock<SchoolContext> _mockContext;
+    private Mock<ISchoolService> _schoolServiceMock;
     private List<School> _schools;
 
     [SetUp]
     public void Setup()
     {
-        _mockContext = new Mock<SchoolContext>();
         _schools = new List<School>
         {
             new School { Id = 1, Name = "School 1"},
             new School { Id = 2, Name = "School 2"}
         };
 
-        _mockContext.Setup(m => m.Schools).Returns((DbSet<School>)_schools.AsQueryable());
-        _controller = new SchoolController(_mockContext.Object);
+        _schoolServiceMock = new Mock<ISchoolService>();
+
+        _schoolServiceMock.Setup(service => service.GetSchools()).ReturnsAsync(_schools);
+
+        _schoolServiceMock.Setup(service => service.GetSchool(It.IsAny<int>())).ReturnsAsync((int id) => _schools.First(s => s.Id == id));
+
+        _controller = new SchoolController(_schoolServiceMock.Object);
     }
 
     [Test]
-    public void GetSchools_ReturnsCorrectNumberOfSchools()
+    public async Task GetSchools_ReturnsCorrectNumberOfSchools()
     {
-        var result = _controller.GetSchools();
+        var actionResult = await _controller.GetSchools();
+        var result = actionResult.Result as OkObjectResult;
 
-        // Check that the result is a list of Schools and has correct count
-        Assert.That(result.Result.Value, Is.TypeOf<List<School>>());
-        Assert.That(result.Result.Value.Count, Is.EqualTo(2));
+        Assert.IsNotNull(result);
+        var schools = result.Value as List<School>;
+
+        Assert.That(schools, Is.TypeOf<List<School>>());
+        Assert.That(schools.Count, Is.EqualTo(2));
     }
 
     [Test]
     public void GetSchool_ReturnsCorrectSchool()
     {
-        var result = _controller.GetSchool(1);
+        var result = _controller.GetSchool(1).Result;
 
         // Check that the result is a School and has correct Id
-        Assert.That(result.Result.Value, Is.TypeOf<School>());
-        Assert.That(result.Result.Value.Id, Is.EqualTo(1));
+        Assert.That(result.Value, Is.TypeOf<School>());
+        Assert.That(result.Value.Id, Is.EqualTo(1));
     }
 
     [Test]
     public void GetSchool_ReturnsNotFound_ForInvalidId()
     {
-        var result = _controller.GetSchool(999);
+        // Assuming there is no school with ID 999
+        _schoolServiceMock.Setup(service => service.GetSchool(It.IsAny<int>())).ReturnsAsync((School)null);
+
+        var result = _controller.GetSchool(999).Result;
 
         // Check that the result is NotFound
         Assert.That(result.Result, Is.TypeOf<NotFoundResult>());
     }
 }
+

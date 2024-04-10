@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Controllers;
 
@@ -9,67 +10,63 @@ namespace SchoolAPI.Controllers;
 [ApiController]
 public class ClassController : ControllerBase
 {
-    private readonly SchoolContext _context;
+    private readonly IClassService _classService;
 
-    public ClassController(SchoolContext context)
+    public ClassController(IClassService classService)
     {
-        _context = context;
+        _classService = classService;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Class>>> GetClasses()
     {
-        return await _context.Classes.ToListAsync();
+        return Ok(await _classService.GetClasses());
     }
 
-    // POST 
     [HttpPost]
     public async Task<ActionResult<Class>> PostClass(Class classType)
     {
-        _context.Classes.Add(classType);
-        await _context.SaveChangesAsync();
+        var createdClass = await _classService.AddClass(classType);
 
-        return CreatedAtAction(nameof(GetClasses), new { id = classType.Id }, classType);
+        return CreatedAtAction(nameof(GetClasses), new { id = createdClass.Id }, createdClass);
     }
 
-    // PUT 
     [HttpPut("{id}")]
     public async Task<IActionResult> PutClass(int id, Class classType)
     {
         if (id != classType.Id)
+        {
             return BadRequest();
-
-        _context.Entry(classType).State = EntityState.Modified;
+        }
 
         try
         {
-            await _context.SaveChangesAsync();
+            await _classService.UpdateClass(id, classType);
         }
         catch (DbUpdateConcurrencyException)
         {
-            if (!ClassExists(id))
+            if (!_classService.ClassExists(id))
+            {
                 return NotFound();
+            }
             else
+            {
                 throw;
+            }
         }
 
         return NoContent();
     }
 
-    // DELETE
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteClass(int id)
     {
-        var classType = await _context.Classes.FindAsync(id);
-        if (classType == null)
+        if (!_classService.ClassExists(id))
+        {
             return NotFound();
+        }
 
-        _context.Classes.Remove(classType);
-        await _context.SaveChangesAsync();
-
+        await _classService.DeleteClass(id);
         return NoContent();
     }
-
-    private bool ClassExists(int id) => _context.Classes.Any(e => e.Id == id);
-
 }

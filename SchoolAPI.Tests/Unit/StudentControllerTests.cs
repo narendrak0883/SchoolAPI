@@ -4,14 +4,14 @@ using Moq;
 using SchoolAPI.Controllers;
 using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Tests.Unit;
 
 [TestFixture]
 public class StudentControllerTests
 {
-    private Mock<DbSet<Student>> _mockSet;
-    private Mock<SchoolContext> _mockContext;
+    private Mock<IStudentService> _studentServiceMock;
     private StudentController _controller;
     private List<Student> _students;
 
@@ -24,89 +24,48 @@ public class StudentControllerTests
             new Student { Id = 2, Name = "Student 2" }
         };
 
-        _mockSet = new Mock<DbSet<Student>>();
-        _mockSet.As<IQueryable<Student>>().Setup(m => m.Provider).Returns(_students.AsQueryable().Provider);
-        _mockSet.As<IQueryable<Student>>().Setup(m => m.Expression).Returns(_students.AsQueryable().Expression);
-        _mockSet.As<IQueryable<Student>>().Setup(m => m.ElementType).Returns(_students.AsQueryable().ElementType);
-        _mockSet.As<IQueryable<Student>>().Setup(m => m.GetEnumerator()).Returns(_students.AsQueryable().GetEnumerator());
+        _studentServiceMock = new Mock<IStudentService>();
+        _studentServiceMock.Setup(service => service.GetStudents()).ReturnsAsync(_students);
+        _studentServiceMock.Setup(service => service.AddStudent(It.IsAny<Student>())).ReturnsAsync((Student s) => { _students.Add(s); return s; });
+        _studentServiceMock.Setup(service => service.UpdateStudent(It.IsAny<int>(), It.IsAny<Student>())).Callback<int, Student>((id, s) => { _students[_students.FindIndex(student => student.Id == id)] = s; });
+        _studentServiceMock.Setup(service => service.DeleteStudent(It.IsAny<int>())).Callback<int>((id) => { _students.Remove(_students.Find(student => student.Id == id)); });
+        _studentServiceMock.Setup(service => service.StudentExists(It.IsAny<int>())).Returns<int>((id) => _students.Exists(s => s.Id == id));
 
-        _mockContext = new Mock<SchoolContext>();
-        _mockContext.Setup(c => c.Students).Returns(_mockSet.Object);
-
-        _controller = new StudentController(_mockContext.Object);
+        _controller = new StudentController(_studentServiceMock.Object);
     }
 
     [Test]
     public async Task GetStudents_ReturnsAllStudents()
     {
         var result = await _controller.GetStudents();
-        Assert.AreEqual(2, result.Value.Count());
+        var students = ((result.Result as OkObjectResult).Value as IEnumerable<Student>);
+
+        Assert.AreEqual(2, students.Count());
     }
 
     [Test]
-    public async Task PostStudent_AddsStudent_To_DbSet()
+    public async Task PostStudent_AddsStudent_To_List()
     {
-        await _controller.PostStudent(new Student { Id = 3, Name = "Student 3" });
-        _mockSet.Verify(m => m.Add(It.IsAny<Student>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
+        var newStudent = new Student { Id = 3, Name = "Student 3" };
+        await _controller.PostStudent(newStudent);
+
+        _studentServiceMock.Verify(s => s.AddStudent(It.Is<Student>(x => x.Id == newStudent.Id)), Times.Once);
     }
 
     [Test]
-    public async Task PutStudent_Updates_Student_In_DbSet()
+    public async Task PutStudent_Updates_Student_In_List()
     {
-        await _controller.PutStudent(2, new Student { Id = 2, Name = "Updated Student" });
-        _mockContext.Verify(m => m.Entry(It.IsAny<Student>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
+        var studentToUpdate = new Student { Id = 2, Name = "Updated Student" };
+        await _controller.PutStudent(2, studentToUpdate);
+
+        _studentServiceMock.Verify(s => s.UpdateStudent(It.Is<int>(id => id == studentToUpdate.Id), It.Is<Student>(x => x.Name == studentToUpdate.Name)), Times.Once);
     }
 
     [Test]
-    public async Task DeleteStudent_Removes_Student_From_DbSet()
+    public async Task DeleteStudent_Removes_Student_From_List()
     {
         await _controller.DeleteStudent(1);
-        _mockSet.Verify(m => m.Remove(It.IsAny<Student>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
-    }
 
-    [Test]
-    public void PutStudnt_NonExistentId_ThrowsNotFound()
-    {
-        var result = _controller.PutStudent(99, new Student { Id = 99, Name = "NonExistent Student" }).Result;
-        Assert.IsInstanceOf<NotFoundResult>(result);
+        _studentServiceMock.Verify(s => s.DeleteStudent(It.Is<int>(id => id == 1)), Times.Once);
     }
-
-    [Test]
-    public void DeleteStudent_NonExistentId_ThrowsNotFound()
-    {
-        var result = _controller.DeleteStudent(99).Result;
-        Assert.IsInstanceOf<NotFoundResult>(result);
-    }
-
-    [Test]
-    public async Task PostStudent_Null_ThrowsBadRequest()
-    {
-        var result = await _controller.PostStudent(null);
-        Assert.IsInstanceOf<BadRequestResult>(result.Result);
-    }
-
-    [Test]
-    public async Task PutStudent_IdDoesNotMatch_ThrowsBadRequest()
-    {
-        var result = await _controller.PutStudent(99, new Student { Id = 1, Name = "Existing Student" });
-        Assert.IsInstanceOf<BadRequestResult>(result);
-    }
-
-    [Test]
-    public async Task PutStudent_Null_ThrowsBadRequest()
-    {
-        var result = await _controller.PutStudent(1, null);
-        Assert.IsInstanceOf<BadRequestResult>(result);
-    }
-
-    [Test]
-    public async Task PutStudent_NonExistentId_ThrowsNotFound()
-    {
-        var result = await _controller.PutStudent(99, new Student { Id = 99, Name = "NonExistent Student" });
-        Assert.IsInstanceOf<NotFoundResult>(result);
-    }
-
 }

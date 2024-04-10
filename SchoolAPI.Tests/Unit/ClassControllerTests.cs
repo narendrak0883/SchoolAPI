@@ -1,17 +1,15 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using SchoolAPI.Controllers;
-using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Tests.Unit;
 
 [TestFixture]
 public class ClassControllerTests
 {
-    private Mock<DbSet<Class>> _mockSet;
-    private Mock<SchoolContext> _mockContext;
+    private Mock<IClassService> _classServiceMock;
     private ClassController _controller;
     private List<Class> _classes;
 
@@ -24,62 +22,70 @@ public class ClassControllerTests
             new Class { Id = 2, Name = "Class 2" }
         };
 
-        _mockSet = new Mock<DbSet<Class>>();
-        _mockSet.As<IQueryable<Class>>().Setup(m => m.Provider).Returns(_classes.AsQueryable().Provider);
-        _mockSet.As<IQueryable<Class>>().Setup(m => m.Expression).Returns(_classes.AsQueryable().Expression);
-        _mockSet.As<IQueryable<Class>>().Setup(m => m.ElementType).Returns(_classes.AsQueryable().ElementType);
-        _mockSet.As<IQueryable<Class>>().Setup(m => m.GetEnumerator())
-            .Returns(_classes.AsQueryable().GetEnumerator());
+        _classServiceMock = new Mock<IClassService>();
+        _classServiceMock.Setup(x => x.GetClasses()).ReturnsAsync(_classes);
+        _classServiceMock.Setup(x => x.ClassExists(It.IsAny<int>())).Returns<int>((id) => _classes.Exists(c => c.Id == id));
+        _classServiceMock.Setup(x => x.AddClass(It.IsAny<Class>())).ReturnsAsync((Class c) => {
+            _classes.Add(c); return c;
+        });
+        _classServiceMock.Setup(x => x.UpdateClass(It.IsAny<int>(), It.IsAny<Class>())).ReturnsAsync((int id, Class c) => {
+            var classToUpdate = _classes.First(c => c.Id == id);
+            classToUpdate = c;
+            return classToUpdate;
+        });
+        _classServiceMock.Setup(x => x.DeleteClass(It.IsAny<int>())).Returns(Task.CompletedTask);
 
-        _mockContext = new Mock<SchoolContext>();
-        _mockContext.Setup(c => c.Classes).Returns(_mockSet.Object);
-
-        _controller = new ClassController(_mockContext.Object);
+        _controller = new ClassController(_classServiceMock.Object);
     }
 
     [Test]
     public async Task GetClasses_ReturnsAllClasses()
     {
-        var result = await _controller.GetClasses();
-        Assert.AreEqual(2, result.Value.Count());
+        var result = await _controller.GetClasses(); 
+        var classes = ((result.Result as OkObjectResult).Value as IEnumerable<Class>);
+
+        Assert.AreEqual(2, classes.Count());
     }
 
     [Test]
     public async Task PostClass_AddsClass_To_DbSet()
     {
-        await _controller.PostClass(new Class { Id = 3, Name = "Class 3" });
-        _mockSet.Verify(m => m.Add(It.IsAny<Class>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
+        var newClass = new Class { Id = 3, Name = "Class 3" };
+        await _controller.PostClass(newClass);
+
+        _classServiceMock.Verify(s => s.AddClass(It.Is<Class>(x => x.Id == newClass.Id)), Times.Once);
     }
 
     [Test]
     public async Task PutClass_Updates_Class_In_DbSet()
     {
-        await _controller.PutClass(2, new Class { Id = 2, Name = "Updated Class" });
-        _mockContext.Verify(m => m.Entry(It.IsAny<Class>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
+        var classToUpdate = new Class { Id = 2, Name = "Updated Class" };
+        await _controller.PutClass(2, classToUpdate);
+
+        _classServiceMock.Verify(s => s.UpdateClass(It.Is<int>(id => id == classToUpdate.Id), It.Is<Class>(x => x.Name == classToUpdate.Name)), Times.Once);
     }
 
     [Test]
     public async Task DeleteClass_Removes_Class_From_DbSet()
     {
         await _controller.DeleteClass(1);
-        _mockSet.Verify(m => m.Remove(It.IsAny<Class>()), Times.Once());
-        _mockContext.Verify(m => m.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once());
+
+        _classServiceMock.Verify(s => s.DeleteClass(It.Is<int>(id => id == 1)), Times.Once);
     }
+
     [Test]
-    public void PutClass_NonExistentId_ThrowsNotFound()
+    public void PutClass_NonExistentId_ReturnsNotFound()
     {
         var result = _controller.PutClass(99, new Class { Id = 99, Name = "NonExistent Class" }).Result;
+
         Assert.IsInstanceOf<NotFoundResult>(result);
     }
 
     [Test]
-    public void DeleteClass_NonExistentId_ThrowsNotFound()
+    public void DeleteClass_NonExistentId_ReturnsNotFound()
     {
         var result = _controller.DeleteClass(99).Result;
+
         Assert.IsInstanceOf<NotFoundResult>(result);
     }
-
-
 }

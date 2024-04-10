@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Controllers
 {
@@ -9,45 +10,39 @@ namespace SchoolAPI.Controllers
     [ApiController]
     public class StudentController : ControllerBase
     {
-        private readonly SchoolContext _context;
+        private readonly IStudentService _studentService;
 
-        public StudentController(SchoolContext context)
+        public StudentController(IStudentService studentService)
         {
-            _context = context;
+            _studentService = studentService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Student>>> GetStudents()
         {
-            return await _context.Students.ToListAsync();
+            return Ok(await _studentService.GetStudents());
         }
 
-        // POST 
         [HttpPost]
         public async Task<ActionResult<Student>> PostStudent(Student student)
         {
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetStudents), new { id = student.Id }, student);
+            var createdStudent = await _studentService.AddStudent(student);
+            return CreatedAtAction(nameof(GetStudents), new { id = createdStudent.Id }, createdStudent);
         }
 
-        // PUT 
         [HttpPut("{id}")]
         public async Task<IActionResult> PutStudent(int id, Student student)
         {
             if (id != student.Id)
                 return BadRequest();
 
-            _context.Entry(student).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _studentService.UpdateStudent(id, student);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!StudentExists(id))
+                if (!_studentService.StudentExists(id))
                     return NotFound();
                 else
                     throw;
@@ -56,23 +51,17 @@ namespace SchoolAPI.Controllers
             return NoContent();
         }
 
-        // DELETE
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteStudent(int id)
         {
-            var student = await _context.Students.FindAsync(id);
-            if (student == null)
+            if (!_studentService.StudentExists(id))
                 return NotFound();
 
-            _context.Students.Remove(student);
-            await _context.SaveChangesAsync();
+            await _studentService.DeleteStudent(id);
 
             return NoContent();
         }
-
-        private bool StudentExists(int id) => _context.Students.Any(e => e.Id == id);
-
-
     }
+
 
 }

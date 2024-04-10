@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Controllers
 {
@@ -9,23 +10,23 @@ namespace SchoolAPI.Controllers
     [ApiController]
     public class SchoolController : ControllerBase
     {
-        private readonly SchoolContext _context;
+        private readonly ISchoolService _schoolService;
 
-        public SchoolController(SchoolContext context)
+        public SchoolController(ISchoolService schoolService)
         {
-            _context = context;
+            _schoolService = schoolService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<School>>> GetSchools()
         {
-            return await _context.Schools.ToListAsync();
+            return Ok(await _schoolService.GetSchools());
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<School>> GetSchool(int id)
         {
-            var school = await _context.Schools.FindAsync(id);
+            var school = await _schoolService.GetSchool(id);
 
             if (school == null)
             {
@@ -38,11 +39,9 @@ namespace SchoolAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<School>> PostSchool(School school)
         {
-            _context.Schools.Add(school);
-            await _context.SaveChangesAsync();
+            var createdSchool = await _schoolService.AddSchool(school);
 
-            // The 'CreatedAtAction' returns a 201 status code which means the object was created.
-            return CreatedAtAction("GetSchool", new { id = school.Id }, school);
+            return CreatedAtAction("GetSchool", new { id = createdSchool.Id }, createdSchool);
         }
 
         [HttpPut("{id}")]
@@ -53,15 +52,13 @@ namespace SchoolAPI.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(school).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _schoolService.UpdateSchool(id, school);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!SchoolExists(id))
+                if (!_schoolService.SchoolExists(id))
                 {
                     return NotFound();
                 }
@@ -77,22 +74,17 @@ namespace SchoolAPI.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSchool(int id)
         {
-            var school = await _context.Schools.FindAsync(id);
+            var school = await _schoolService.GetSchool(id);
             if (school == null)
             {
                 return NotFound();
             }
 
-            _context.Schools.Remove(school);
-            await _context.SaveChangesAsync();
+            await _schoolService.DeleteSchool(id);
 
             return NoContent();
         }
-
-        private bool SchoolExists(int id)
-        {
-            return _context.Schools.Any(e => e.Id == id);
-        }
     }
+
 
 }

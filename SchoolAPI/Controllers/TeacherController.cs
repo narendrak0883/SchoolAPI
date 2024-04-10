@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolAPI.EFCore;
 using SchoolAPI.Models;
+using SchoolAPI.Services;
 
 namespace SchoolAPI.Controllers
 {
@@ -9,45 +10,39 @@ namespace SchoolAPI.Controllers
     [ApiController]
     public class TeacherController : ControllerBase
     {
-        private readonly SchoolContext _context;
+        private readonly ITeacherService _teacherService;
 
-        public TeacherController(SchoolContext context)
+        public TeacherController(ITeacherService teacherService)
         {
-            _context = context;
+            _teacherService = teacherService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Teacher>>> GetTeachers()
         {
-            return await _context.Teachers.ToListAsync();
+            return Ok(await _teacherService.GetTeachers());
         }
 
-        // POST 
         [HttpPost]
         public async Task<ActionResult<Teacher>> PostTeacher(Teacher teacher)
         {
-            _context.Teachers.Add(teacher);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetTeachers), new { id = teacher.Id }, teacher);
+            var createdTeacher = await _teacherService.AddTeacher(teacher);
+            return CreatedAtAction(nameof(GetTeachers), new { id = createdTeacher.Id }, createdTeacher);
         }
 
-        // PUT 
         [HttpPut("{id}")]
         public async Task<IActionResult> PutTeacher(int id, Teacher teacher)
         {
             if (id != teacher.Id)
                 return BadRequest();
 
-            _context.Entry(teacher).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _teacherService.UpdateTeacher(id, teacher);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!TeacherExists(id))
+                if (!_teacherService.TeacherExists(id))
                     return NotFound();
                 else
                     throw;
@@ -56,23 +51,16 @@ namespace SchoolAPI.Controllers
             return NoContent();
         }
 
-        // DELETE
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTeacher(int id)
         {
-            var teacher = await _context.Teachers.FindAsync(id);
-            if (teacher == null)
+            if (!_teacherService.TeacherExists(id))
                 return NotFound();
 
-            _context.Teachers.Remove(teacher);
-            await _context.SaveChangesAsync();
+            await _teacherService.DeleteTeacher(id);
 
             return NoContent();
         }
-
-        private bool TeacherExists(int id) => _context.Teachers.Any(e => e.Id == id);
-
-
     }
 
 }
