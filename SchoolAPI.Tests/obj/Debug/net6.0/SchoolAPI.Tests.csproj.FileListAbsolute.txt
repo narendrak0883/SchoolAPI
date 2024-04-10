@@ -1,0 +1,6 @@
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\bin\Debug\net6.0\CoverletSourceRootsMapping
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\obj\Debug\net6.0\SchoolAPI.Tests.csproj.AssemblyReference.cache
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\obj\Debug\net6.0\SchoolAPI.Tests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\obj\Debug\net6.0\SchoolAPI.Tests.AssemblyInfoInputs.cache
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\obj\Debug\net6.0\SchoolAPI.Tests.AssemblyInfo.cs
+C:\Users\skancheti\source\repos\SchoolAPI\SchoolAPI.Tests\obj\Debug\net6.0\SchoolAPI.Tests.csproj.CoreCompileInputs.cache
